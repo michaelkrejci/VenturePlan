@@ -1,9 +1,7 @@
 local _, T = ...
 local EV = T.Evie
 
-local overDesc = {
-	[91]="Reduces the damage dealt by the furthest enemy by 1 for 3 rounds.",
-}
+local FollowerList, MissionRewards
 
 local GetMaskBoard do
 	local b, u, om = {}, {curHP=1}
@@ -58,20 +56,34 @@ local function FormatTargetBlips(tm, bm, prefix, ac)
 	ac = ac and ac .. "|t" or "120:255:0|t"
 	local r, xs = "", 0
 	local _, sh = GetPhysicalScreenSize()
-	local bw = (blipMetric:GetStringWidth()+select(2,blipMetric:GetFont())*(sh*5/9000-0.7))/0.64*UIParent:GetScale()
-	local yd, bwc = math.floor(bw/2+0.5), math.ceil(bw)
+	blipMetric:SetText("|TInterface/Minimap/PartyRaidBlipsV2:8:8|t|TInterface/Minimap/PartyRaidBlipsV2:8:8|t")
+	local w2 = blipMetric:GetStringWidth()
+	blipMetric:SetText("|TInterface/Minimap/PartyRaidBlipsV2:8:8|t")
+	local w1 = blipMetric:GetStringWidth()
+	local bw = (w2-w1+select(2,blipMetric:GetFont())*(sh*5/9000-0.7))/0.64*UIParent:GetScale()
+	local yd = bw/2
 	if tm % 32 > 0 then
-		for i=0,4 do
+		local xo = 0
+		for i=2,4 do
 			local t, p = tm % 2^(i+1) >= 2^i, bm % 2^(i+1) >= 2^i
-			r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. (i < 2 and (math.ceil(bw/2) .. ":" .. -yd) or (-2*bwc .. ":" .. yd)).. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
+			r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. (xo .. ":" .. yd).. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
+			if i < 4 then
+				i, xo = i - 2, xo - bw/2
+				t, p = tm % 2^(i+1) >= 2^i, bm % 2^(i+1) >= 2^i
+				r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. (xo .. ":" .. -yd).. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
+				xo = xo - bw/2
+			end
 		end
-		xs = -10
+		xs = -bw
 	end
 	if tm >= 32 then
-		local lo, hi = xs .. ":" .. -yd, (xs-4*bwc) .. ":" .. yd
-		for i=5,12 do
+		local xo = xs
+		for i=5,8 do
 			local t, p = tm % 2^(i+1) >= 2^i, bm % 2^(i+1) >= 2^i
-			r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. (i > 8 and hi or lo).. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
+			r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. xo .. ":" .. -yd .. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
+			i, xo = i + 4, xo - bw
+			t, p = tm % 2^(i+1) >= 2^i, bm % 2^(i+1) >= 2^i
+			r = r .. "|TInterface/Minimap/PartyRaidBlipsV2:8:8:" .. xo .. ":" .. yd  .. ":64:32:0:20:0:20:" .. (t and ac or p and "160:160:160|t" or "40:40:40|t")
 		end
 	end
 	if prefix and r ~= "" then
@@ -168,7 +180,8 @@ local function Puck_OnEnter(self)
 			GameTooltip:AddLine(" ")
 			local si = T.KnownSpells[s.autoCombatSpellID]
 			local pfx = si and "" or "|TInterface/EncounterJournal/UI-EJ-WarningTextIcon:0|t "
-			GameTooltip:AddDoubleLine(pfx .. "|T" .. s.icon .. ":0:0:0:0:64:64:4:60:4:60|t " .. s.name, "|cffa8a8a8[CD: " .. s.cooldown .. "T]|r")
+			local cdt = s.cooldown ~= 0 and "[CD: " .. s.cooldown .. "T]" or SPELL_PASSIVE_EFFECT
+			GameTooltip:AddDoubleLine(pfx .. "|T" .. s.icon .. ":0:0:0:0:64:64:4:60:4:60|t " .. s.name, "|cffa8a8a8" .. cdt .. "|r")
 			local dc, guideLine = 0.95
 			if si and si.type == "nop" then
 				dc, guideLine = 0.60, "It does nothing."
@@ -187,8 +200,8 @@ local function Puck_OnEnter(self)
 					end
 				end
 			end
-			if overDesc[s.autoCombatSpellID] then
-				dc, guideLine = 0.60, overDesc[s.autoCombatSpellID] .. (guideLine and "|n" .. guideLine or "")
+			if si.desc then
+				dc, guideLine = 0.60, si.desc .. (guideLine and "|n" .. guideLine or "")
 			end
 			GameTooltip:AddLine(s.description, dc, dc, dc, 1)
 			if guideLine then
@@ -297,7 +310,7 @@ local function Predictor_OnClick(self)
 
 	if rngModel then
 		if sim.exhaustive then
-			GameTooltip:AddLine("The guide shows you a number of possible futures. In some, the adventure ends in truimph; in others, a particularly horrible failure.", 1,1,1,1)
+			GameTooltip:AddLine("The guide shows you a number of possible futures. In some, the adventure ends in triumph; in others, a particularly horrible failure.", 1,1,1,1)
 		else
 			GameTooltip:AddLine("The guide shows you many possible futures. Too many. It is impossible to draw conclusions about your party's chances from this.", 1,1,1,1)
 			if (sim.pWin == 0) then
@@ -340,7 +353,7 @@ local function Predictor_OnClick(self)
 				GameTooltip:AddLine("Turns survived: |cffffffff" .. sim.turn, c.r, c.g, c.b)
 				GameTooltip:AddLine("Remaining enemy health: |cffffffff" .. thp .. " (" .. math.ceil(thp/mhp*100) .. "%)", c.r, c.g, c.b)
 			end
-		elseif sim.exhaustive and (sim.pWin == 1 or sim.pLoss == 0) and sim.forks then
+		elseif sim.exhaustive and (sim.pWin == 1 or sim.pLose == 1) and sim.forks then
 			local lo, hi, inf = {}, {}, math.huge
 			local c = NORMAL_FONT_COLOR
 			for i=0,#sim.forks do
@@ -378,8 +391,10 @@ local function Predictor_OnClick(self)
 				local hmin, hmax, maxHP = 0, 0, 0
 				for i=5,12 do
 					local e = sim.board[i]
-					maxHP = maxHP + (e.maxHP or 0)
-					hmin, hmax = hmin + (lo[i] or 0), hmax + (hi[i] or 0)
+					if e then
+						maxHP = maxHP + (e.maxHP or 0)
+						hmin, hmax = hmin + (lo[i] or 0), hmax + (hi[i] or 0)
+					end
 				end
 				local chp = hmin == hmax and hmin or (hmin .. " - " .. hmax)
 				hmin, hmax = math.ceil(hmin/maxHP*100), math.ceil(hmax/maxHP*100)
@@ -403,12 +418,44 @@ local function MissionGroup_OnUpdate()
 	if o and not o:IsForbidden() and o:GetScript("OnEnter") and o:GetParent():GetParent() == CovenantMissionFrame.MissionTab.MissionPage.Board then
 		o:GetScript("OnEnter")(o)
 	end
+	FollowerList:SyncToBoard()
 end
 local function MissionRewards_OnShow(self)
 	local mi = CovenantMissionFrame.MissionTab.MissionPage.missionInfo
 	local d = mi and mi.duration
 	self.Rewards:SetRewards(mi and mi.xp, mi and mi.rewards)
 	self.Duration:SetText(d and "Duration: |cffffffff" .. d or "")
+	local xp = mi and mi.xp or 0
+	for i=1,mi and mi.rewards and #mi.rewards or 0 do
+		local r = mi.rewards[i]
+		if r.followerXP then
+			xp = xp + r.followerXP
+		end
+	end
+	if FollowerList then
+		self.xpGain = xp
+		FollowerList:SyncXPGain(xp)
+	end
+end
+local function MissionView_OnShow(self)
+	if not FollowerList then
+		FollowerList = T.CreateObject("FollowerList", CovenantMissionFrame)
+		FollowerList:ClearAllPoints()
+		FollowerList:SetPoint("BOTTOM", CovenantMissionFrameFollowers, "BOTTOM", 0, 8)
+	end
+	FollowerList:Refresh(MissionRewards and MissionRewards.xpGain)
+	FollowerList:Show()
+	CovenantMissionFrameFollowers:Hide()
+	CovenantMissionFrameFollowers.MaterialFrame:SetParent(FollowerList)
+	CovenantMissionFrameFollowers.HealAllButton:SetParent(FollowerList)
+end
+local function MissionView_OnHide(self)
+	if FollowerList then
+		FollowerList:Hide()
+	end
+	CovenantMissionFrameFollowers:Show()
+	CovenantMissionFrameFollowers.MaterialFrame:SetParent(CovenantMissionFrameFollowers)
+	CovenantMissionFrameFollowers.HealAllButton:SetParent(CovenantMissionFrameFollowers)
 end
 
 function EV:I_ADVENTURES_UI_LOADED()
@@ -450,12 +497,21 @@ function EV:I_ADVENTURES_UI_LOADED()
 	local s = CovenantMissionFrame.MissionTab.MissionPage.Stage
 	s.Title:SetPoint("LEFT", s.Header, "LEFT", 100, 9)
 	local ir = T.CreateObject("InlineRewardBlock", s)
+	MissionRewards = ir
 	ir:SetPoint("LEFT", s.Header, "LEFT", 100, -16)
 	ir:SetScript("OnShow", MissionRewards_OnShow)
 	ir.Duration = ir:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 	ir.Duration:SetPoint("LEFT", ir, "RIGHT", 4, 0)
 	hooksecurefunc(CovenantMissionFrame, "SetTitle", function()
 		MissionRewards_OnShow(ir)
+	end)
+	hooksecurefunc(CovenantMissionFrame:GetMissionPage(), "Show", MissionView_OnShow)
+	MP.Board:HookScript("OnHide", MissionView_OnHide)
+	MP.Board:HookScript("OnShow", MissionView_OnShow)
+	hooksecurefunc(CovenantMissionFrameFollowers, "UpdateFollowers", function()
+		if MP.Board:IsVisible() and not (MissionList and MissionList:IsVisible()) then
+			MissionView_OnShow()
+		end
 	end)
 	return false
 end
